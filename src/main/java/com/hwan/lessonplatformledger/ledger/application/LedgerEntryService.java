@@ -5,6 +5,7 @@ import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerEntryCom
 import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerEntryResult;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerEntry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -17,10 +18,16 @@ public class LedgerEntryService {
     private final LedgerEntryRepository ledgerEntryRepository;
 
     public RecordLedgerEntryResult recordEntry(RecordLedgerEntryCommand command) {
-        LedgerEntry entry = ledgerEntryRepository.findByIdempotencyKey(command.idempotencyKey())
-                .orElseGet(() -> createEntry(command));
+        try {
+            LedgerEntry entry = ledgerEntryRepository.findByIdempotencyKey(command.idempotencyKey())
+                    .orElseGet(() -> createEntry(command));
 
-        return RecordLedgerEntryResult.of(entry);
+            return RecordLedgerEntryResult.of(entry);
+        } catch (DataIntegrityViolationException exception) {
+            return ledgerEntryRepository.findByIdempotencyKey(command.idempotencyKey())
+                    .map(RecordLedgerEntryResult::of)
+                    .orElseThrow(() -> exception);
+        }
     }
 
     private LedgerEntry createEntry(RecordLedgerEntryCommand command) {

@@ -7,6 +7,7 @@ import com.hwan.lessonplatformledger.ledger.domain.LedgerDirection;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerEntry;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerStatus;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerTransactionType;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,17 +16,16 @@ import org.springframework.boot.data.jdbc.test.autoconfigure.DataJdbcTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJdbcTest
 @Import(LedgerEntryService.class)
 @ActiveProfiles("test")
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
-@TestPropertySource(properties = "spring.sql.init.mode=always")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("Ledger Entry 기록 통합 테스트")
 class LedgerEntryServiceIntegrationTest {
 
@@ -85,6 +85,54 @@ class LedgerEntryServiceIntegrationTest {
 
         assertThat(second.entryId()).isNotEqualTo(first.entryId());
         assertThat(ledgerEntryRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("원장 저장 후 버전이 생성되고 수정 시 증가한다")
+    void incrementsVersionWhenEntryIsUpdated() {
+        RecordLedgerEntryResult result = ledgerEntryService.recordEntry(
+                command("payment:payment-1:completed")
+        );
+        LedgerEntry saved = ledgerEntryRepository.findById(result.entryId()).orElseThrow();
+
+        assertThat(saved.getVersion()).isNotNull();
+        Long initialVersion = saved.getVersion();
+
+        saved.markReversed("ledger-reversal-1");
+        LedgerEntry updated = ledgerEntryRepository.save(saved);
+
+        assertThat(updated.getStatus()).isEqualTo(LedgerStatus.REVERSED);
+        assertThat(updated.getReversedEntryId()).isEqualTo("ledger-reversal-1");
+        assertThat(updated.getVersion()).isGreaterThan(initialVersion);
+
+        LedgerEntry reloaded = ledgerEntryRepository.findById(result.entryId()).orElseThrow();
+        assertThat(reloaded.getVersion()).isEqualTo(updated.getVersion());
+        assertThat(reloaded.getStatus()).isEqualTo(LedgerStatus.REVERSED);
+    }
+
+    @Test
+    @DisplayName("데이터베이스가 동일한 멱등성 키의 중복 저장을 거부한다")
+    void rejectsDuplicateIdempotencyKeyAtDatabaseLevel() {
+        RecordLedgerEntryResult first = ledgerEntryService.recordEntry(
+                command("payment:payment-1:completed")
+        );
+        LedgerEntry duplicate = LedgerEntry.recordEntry(
+                "different-entry-id",
+                "payment:payment-1:completed",
+                LedgerTransactionType.PAYMENT,
+                "payment-1",
+                "order-1",
+                "user-1",
+                "seller-1",
+                new BigDecimal("80000"),
+                "KRW",
+                LedgerDirection.CREDIT,
+                "중복 결제",
+                first.createdAt()
+        );
+
+        assertThatThrownBy(() -> ledgerEntryRepository.save(duplicate))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private RecordLedgerEntryCommand command(String idempotencyKey) {

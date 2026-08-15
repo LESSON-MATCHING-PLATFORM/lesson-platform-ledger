@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Ledger Entry 기록 서비스 단위 테스트")
@@ -93,6 +94,21 @@ class LedgerEntryServiceTest {
         assertThat(result.entryId()).isEqualTo(existingEntry.getEntryId());
         assertThat(result.status()).isEqualTo(existingEntry.getStatus());
         verify(ledgerEntryRepository, never()).save(any(LedgerEntry.class));
+    }
+
+    @Test
+    @DisplayName("동시 저장 충돌이 발생하면 기존 원장을 재조회해 반환한다")
+    void returnsExistingEntryAfterConcurrentInsertConflict() {
+        LedgerEntry existingEntry = savedEntry();
+        when(ledgerEntryRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
+                .thenReturn(Optional.empty(), Optional.of(existingEntry));
+        when(ledgerEntryRepository.save(any(LedgerEntry.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate idempotency key"));
+
+        RecordLedgerEntryResult result = ledgerEntryService.recordEntry(command());
+
+        assertThat(result.entryId()).isEqualTo(existingEntry.getEntryId());
+        verify(ledgerEntryRepository).save(any(LedgerEntry.class));
     }
 
     private RecordLedgerEntryCommand command() {
