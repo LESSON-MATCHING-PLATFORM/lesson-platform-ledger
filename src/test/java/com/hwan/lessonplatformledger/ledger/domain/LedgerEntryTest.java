@@ -49,7 +49,7 @@ class LedgerEntryTest {
     @DisplayName("0 이하의 금액을 가진 원장은 생성할 수 없다")
     void rejectsNonPositiveAmount() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> LedgerEntry.create(
+                .isThrownBy(() -> LedgerEntry.recordEntry(
                         "ledger-1",
                         "payment:payment-1:completed",
                         LedgerTransactionType.PAYMENT,
@@ -66,7 +66,7 @@ class LedgerEntryTest {
     }
 
     private LedgerEntry createEntry() {
-        return LedgerEntry.create(
+        return LedgerEntry.recordEntry(
                 "ledger-1",
                 "payment:payment-1:completed",
                 LedgerTransactionType.PAYMENT,

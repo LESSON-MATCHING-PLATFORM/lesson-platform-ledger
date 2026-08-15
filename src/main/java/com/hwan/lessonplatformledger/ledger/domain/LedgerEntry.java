@@ -64,7 +64,7 @@ public class LedgerEntry {
         this.version = version;
     }
 
-    public static LedgerEntry create(
+    public static LedgerEntry recordEntry(
             String entryId,
             String idempotencyKey,
             LedgerTransactionType transactionType,

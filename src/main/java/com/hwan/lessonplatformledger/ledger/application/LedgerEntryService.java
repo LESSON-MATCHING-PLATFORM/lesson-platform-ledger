@@ -1,8 +1,8 @@
 package com.hwan.lessonplatformledger.ledger.application;
 
-import com.hwan.lessonplatformledger.ledger.adapter.LedgerRepository;
-import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerCommand;
-import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerResult;
+import com.hwan.lessonplatformledger.ledger.adapter.LedgerEntryRepository;
+import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerEntryCommand;
+import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerEntryResult;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerEntry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,19 +12,19 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class LedgerService {
+public class LedgerEntryService {
 
-    private final LedgerRepository ledgerRepository;
+    private final LedgerEntryRepository ledgerEntryRepository;
 
-    public RecordLedgerResult record(RecordLedgerCommand command) {
-        LedgerEntry entry = ledgerRepository.findByIdempotencyKey(command.idempotencyKey())
+    public RecordLedgerEntryResult recordEntry(RecordLedgerEntryCommand command) {
+        LedgerEntry entry = ledgerEntryRepository.findByIdempotencyKey(command.idempotencyKey())
                 .orElseGet(() -> createEntry(command));
 
-        return RecordLedgerResult.of(entry);
+        return RecordLedgerEntryResult.of(entry);
     }
 
-    private LedgerEntry createEntry(RecordLedgerCommand command) {
-        LedgerEntry newLedger = LedgerEntry.create(
+    private LedgerEntry createEntry(RecordLedgerEntryCommand command) {
+        LedgerEntry newLedger = LedgerEntry.recordEntry(
                 UUID.randomUUID().toString(),
                 command.idempotencyKey(),
                 command.transactionType(),
@@ -39,7 +39,7 @@ public class LedgerService {
                 Instant.now()
         );
 
-        return ledgerRepository.save(newLedger);
+        return ledgerEntryRepository.save(newLedger);
     }
 
 }

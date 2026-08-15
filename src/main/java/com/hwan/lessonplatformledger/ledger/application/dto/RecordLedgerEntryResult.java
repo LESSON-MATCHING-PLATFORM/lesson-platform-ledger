@@ -8,7 +8,7 @@ import com.hwan.lessonplatformledger.ledger.domain.LedgerTransactionType;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-public record RecordLedgerResult(
+public record RecordLedgerEntryResult(
     String entryId,
     String transactionId,
     LedgerTransactionType transactionType,
@@ -18,8 +18,8 @@ public record RecordLedgerResult(
     LedgerStatus status,
     Instant createdAt
 ) {
-    public static RecordLedgerResult of(LedgerEntry entry) {
-        return new RecordLedgerResult(
+    public static RecordLedgerEntryResult of(LedgerEntry entry) {
+        return new RecordLedgerEntryResult(
             entry.getEntryId(),
             entry.getTransactionId(),
             entry.getTransactionType(),

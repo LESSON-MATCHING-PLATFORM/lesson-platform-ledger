@@ -6,7 +6,7 @@ import com.hwan.lessonplatformledger.ledger.domain.LedgerTransactionType;
 
 import java.math.BigDecimal;
 
-public record RecordLedgerCommand(
+public record RecordLedgerEntryCommand(
     String idempotencyKey,
     LedgerTransactionType transactionType,
     String transactionId,

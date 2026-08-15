@@ -1,8 +1,8 @@
 package com.hwan.lessonplatformledger.ledger.application;
 
-import com.hwan.lessonplatformledger.ledger.adapter.LedgerRepository;
-import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerCommand;
-import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerResult;
+import com.hwan.lessonplatformledger.ledger.adapter.LedgerEntryRepository;
+import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerEntryCommand;
+import com.hwan.lessonplatformledger.ledger.application.dto.RecordLedgerEntryResult;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerDirection;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerEntry;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerStatus;
@@ -28,19 +28,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Ledger 기록 서비스 단위 테스트")
-class LedgerServiceTest {
+@DisplayName("Ledger Entry 기록 서비스 단위 테스트")
+class LedgerEntryServiceTest {
 
     private static final String IDEMPOTENCY_KEY = "payment:payment-1:completed";
 
     @Mock
-    private LedgerRepository ledgerRepository;
+    private LedgerEntryRepository ledgerEntryRepository;
 
-    private LedgerService ledgerService;
+    private LedgerEntryService ledgerEntryService;
 
     @BeforeEach
     void setUp() {
-        ledgerService = new LedgerService(ledgerRepository);
+        ledgerEntryService = new LedgerEntryService(ledgerEntryRepository);
     }
 
     @Test
@@ -48,14 +48,14 @@ class LedgerServiceTest {
     void recordsEntryAndReturnsMappedResult() {
         Instant before = Instant.now();
         LedgerEntry savedEntry = savedEntry();
-        when(ledgerRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any(LedgerEntry.class))).thenReturn(savedEntry);
+        when(ledgerEntryRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.empty());
+        when(ledgerEntryRepository.save(any(LedgerEntry.class))).thenReturn(savedEntry);
 
-        RecordLedgerResult result = ledgerService.record(command());
+        RecordLedgerEntryResult result = ledgerEntryService.recordEntry(command());
 
         Instant after = Instant.now();
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerEntryRepository).save(captor.capture());
 
         LedgerEntry recordedEntry = captor.getValue();
         assertThat(recordedEntry.getEntryId()).isNotBlank();
@@ -86,17 +86,17 @@ class LedgerServiceTest {
     @DisplayName("동일한 멱등성 키가 있으면 기존 원장을 반환하고 저장하지 않는다")
     void returnsExistingEntryWhenIdempotencyKeyWasAlreadyRecorded() {
         LedgerEntry existingEntry = savedEntry();
-        when(ledgerRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.of(existingEntry));
+        when(ledgerEntryRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).thenReturn(Optional.of(existingEntry));
 
-        RecordLedgerResult result = ledgerService.record(command());
+        RecordLedgerEntryResult result = ledgerEntryService.recordEntry(command());
 
         assertThat(result.entryId()).isEqualTo(existingEntry.getEntryId());
         assertThat(result.status()).isEqualTo(existingEntry.getStatus());
-        verify(ledgerRepository, never()).save(any(LedgerEntry.class));
+        verify(ledgerEntryRepository, never()).save(any(LedgerEntry.class));
     }
 
-    private RecordLedgerCommand command() {
-        return new RecordLedgerCommand(
+    private RecordLedgerEntryCommand command() {
+        return new RecordLedgerEntryCommand(
                 IDEMPOTENCY_KEY,
                 LedgerTransactionType.PAYMENT,
                 "payment-1",

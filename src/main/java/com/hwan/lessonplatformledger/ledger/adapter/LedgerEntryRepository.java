@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface LedgerRepository extends CrudRepository<LedgerEntry, String> {
+public interface LedgerEntryRepository extends CrudRepository<LedgerEntry, String> {
 
     Optional<LedgerEntry> findByIdempotencyKey(String idempotencyKey);
 }
