@@ -135,6 +135,27 @@ class LedgerEntryServiceIntegrationTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    @DisplayName("보정 원장을 저장하고 기존 원장을 역분개 상태로 갱신한다")
+    void recordsAdjustmentAndReversesOriginalEntry() {
+        RecordLedgerEntryResult original = ledgerEntryService.recordEntry(
+                command("payment:payment-1:completed")
+        );
+
+        RecordLedgerEntryResult adjustment = ledgerEntryService.recordAdjustmentEntry(
+                original.entryId(), adjustmentCommand()
+        );
+
+        LedgerEntry reloadedOriginal = ledgerEntryRepository.findById(original.entryId()).orElseThrow();
+        LedgerEntry savedAdjustment = ledgerEntryRepository.findById(adjustment.entryId()).orElseThrow();
+
+        assertThat(savedAdjustment.getTransactionType()).isEqualTo(LedgerTransactionType.REFUND);
+        assertThat(savedAdjustment.getDirection()).isEqualTo(LedgerDirection.DEBIT);
+        assertThat(reloadedOriginal.getStatus()).isEqualTo(LedgerStatus.REVERSED);
+        assertThat(reloadedOriginal.getReversedEntryId()).isEqualTo(savedAdjustment.getEntryId());
+        assertThat(ledgerEntryRepository.count()).isEqualTo(2);
+    }
+
     private RecordLedgerEntryCommand command(String idempotencyKey) {
         return new RecordLedgerEntryCommand(
                 idempotencyKey,
@@ -147,6 +168,21 @@ class LedgerEntryServiceIntegrationTest {
                 "KRW",
                 LedgerDirection.CREDIT,
                 "강의 결제"
+        );
+    }
+
+    private RecordLedgerEntryCommand adjustmentCommand() {
+        return new RecordLedgerEntryCommand(
+                "refund:payment-1:completed",
+                LedgerTransactionType.REFUND,
+                "refund-1",
+                "order-1",
+                "user-1",
+                "seller-1",
+                new BigDecimal("80000"),
+                "KRW",
+                LedgerDirection.DEBIT,
+                "결제 환불"
         );
     }
 }

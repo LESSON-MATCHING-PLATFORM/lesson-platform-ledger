@@ -7,6 +7,7 @@ import com.hwan.lessonplatformledger.ledger.domain.LedgerEntry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -28,6 +29,19 @@ public class LedgerEntryService {
                     .map(RecordLedgerEntryResult::of)
                     .orElseThrow(() -> exception);
         }
+    }
+
+    @Transactional
+    public RecordLedgerEntryResult recordAdjustmentEntry(String entryId, RecordLedgerEntryCommand command) {
+        LedgerEntry entry = ledgerEntryRepository.findByEntryId(entryId)
+            .orElseThrow();
+
+        RecordLedgerEntryResult recordLedgerEntryResult = recordEntry(command);
+
+        entry.markReversed(recordLedgerEntryResult.entryId());
+        ledgerEntryRepository.save(entry);
+
+        return recordLedgerEntryResult;
     }
 
     private LedgerEntry createEntry(RecordLedgerEntryCommand command) {

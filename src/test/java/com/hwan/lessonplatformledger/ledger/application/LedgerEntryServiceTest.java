@@ -22,8 +22,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -97,8 +99,8 @@ class LedgerEntryServiceTest {
     }
 
     @Test
-    @DisplayName("동시 저장 충돌이 발생하면 기존 원장을 재조회해 반환한다")
-    void returnsExistingEntryAfterConcurrentInsertConflict() {
+    @DisplayName("create 과정에서 유니크 충돌이 발생하면 기존 원장을 재조회해 반환한다")
+    void returnsExistingEntryWhenCreateFailsWithDataIntegrityViolation() {
         LedgerEntry existingEntry = savedEntry();
         when(ledgerEntryRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
                 .thenReturn(Optional.empty(), Optional.of(existingEntry));
@@ -109,6 +111,88 @@ class LedgerEntryServiceTest {
 
         assertThat(result.entryId()).isEqualTo(existingEntry.getEntryId());
         verify(ledgerEntryRepository).save(any(LedgerEntry.class));
+        verify(ledgerEntryRepository, times(2)).findByIdempotencyKey(IDEMPOTENCY_KEY);
+    }
+
+    @Test
+    @DisplayName("create 과정의 유니크 충돌 후 기존 원장을 찾지 못하면 예외를 재전파한다")
+    void rethrowsDataIntegrityViolationWhenExistingEntryCannotBeFoundAfterCreateConflict() {
+        DataIntegrityViolationException exception =
+                new DataIntegrityViolationException("duplicate idempotency key");
+        when(ledgerEntryRepository.findByIdempotencyKey(IDEMPOTENCY_KEY))
+                .thenReturn(Optional.empty(), Optional.empty());
+        when(ledgerEntryRepository.save(any(LedgerEntry.class)))
+                .thenThrow(exception);
+
+        assertThatThrownBy(() -> ledgerEntryService.recordEntry(command()))
+                .isSameAs(exception);
+
+        verify(ledgerEntryRepository, times(2)).findByIdempotencyKey(IDEMPOTENCY_KEY);
+    }
+
+    @Test
+    @DisplayName("보정 원장을 기록하고 기존 원장을 역분개 상태로 저장한다")
+    void recordsAdjustmentAndReversesOriginalEntry() {
+        LedgerEntry originalEntry = savedEntry();
+        LedgerEntry adjustmentEntry = adjustmentEntry();
+        RecordLedgerEntryCommand adjustmentCommand = adjustmentCommand();
+        when(ledgerEntryRepository.findByEntryId(originalEntry.getEntryId()))
+                .thenReturn(Optional.of(originalEntry));
+        when(ledgerEntryRepository.findByIdempotencyKey(adjustmentCommand.idempotencyKey()))
+                .thenReturn(Optional.empty());
+        when(ledgerEntryRepository.save(any(LedgerEntry.class)))
+                .thenReturn(adjustmentEntry, originalEntry);
+
+        RecordLedgerEntryResult result = ledgerEntryService.recordAdjustmentEntry(
+                originalEntry.getEntryId(), adjustmentCommand
+        );
+
+        assertThat(result.entryId()).isEqualTo(adjustmentEntry.getEntryId());
+        assertThat(originalEntry.getStatus()).isEqualTo(LedgerStatus.REVERSED);
+        assertThat(originalEntry.getReversedEntryId()).isEqualTo(adjustmentEntry.getEntryId());
+        ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerEntryRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(LedgerEntry::getStatus)
+                .containsExactly(LedgerStatus.POSTED, LedgerStatus.REVERSED);
+    }
+
+    @Test
+    @DisplayName("원본 원장이 없으면 보정 원장을 기록하지 않는다")
+    void doesNotRecordAdjustmentWhenOriginalEntryDoesNotExist() {
+        RecordLedgerEntryCommand adjustmentCommand = adjustmentCommand();
+        when(ledgerEntryRepository.findByEntryId("missing-entry"))
+                .thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        ledgerEntryService.recordAdjustmentEntry("missing-entry", adjustmentCommand))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+
+        verify(ledgerEntryRepository, never()).findByIdempotencyKey(adjustmentCommand.idempotencyKey());
+        verify(ledgerEntryRepository, never()).save(any(LedgerEntry.class));
+    }
+
+    @Test
+    @DisplayName("동일한 보정 멱등성 키가 있으면 기존 보정 원장을 사용한다")
+    void reusesExistingAdjustmentForSameIdempotencyKey() {
+        LedgerEntry originalEntry = savedEntry();
+        LedgerEntry existingAdjustment = adjustmentEntry();
+        RecordLedgerEntryCommand adjustmentCommand = adjustmentCommand();
+        when(ledgerEntryRepository.findByEntryId(originalEntry.getEntryId()))
+                .thenReturn(Optional.of(originalEntry));
+        when(ledgerEntryRepository.findByIdempotencyKey(adjustmentCommand.idempotencyKey()))
+                .thenReturn(Optional.of(existingAdjustment));
+        when(ledgerEntryRepository.save(originalEntry)).thenReturn(originalEntry);
+
+        RecordLedgerEntryResult result = ledgerEntryService.recordAdjustmentEntry(
+                originalEntry.getEntryId(), adjustmentCommand
+        );
+
+        assertThat(result.entryId()).isEqualTo(existingAdjustment.getEntryId());
+        assertThat(originalEntry.getStatus()).isEqualTo(LedgerStatus.REVERSED);
+        assertThat(originalEntry.getReversedEntryId()).isEqualTo(existingAdjustment.getEntryId());
+        verify(ledgerEntryRepository, never()).save(existingAdjustment);
+        verify(ledgerEntryRepository).save(originalEntry);
     }
 
     private RecordLedgerEntryCommand command() {
@@ -141,6 +225,41 @@ class LedgerEntryServiceTest {
                 LedgerStatus.POSTED,
                 "강의 결제",
                 Instant.parse("2026-08-15T00:00:00Z"),
+                null,
+                0L
+        );
+    }
+
+    private RecordLedgerEntryCommand adjustmentCommand() {
+        return new RecordLedgerEntryCommand(
+                "refund:payment-1:completed",
+                LedgerTransactionType.REFUND,
+                "refund-1",
+                "order-1",
+                "user-1",
+                "seller-1",
+                new BigDecimal("80000"),
+                "KRW",
+                LedgerDirection.DEBIT,
+                "결제 환불"
+        );
+    }
+
+    private LedgerEntry adjustmentEntry() {
+        return new LedgerEntry(
+                "ledger-adjustment-1",
+                "refund:payment-1:completed",
+                LedgerTransactionType.REFUND,
+                "refund-1",
+                "order-1",
+                "user-1",
+                "seller-1",
+                new BigDecimal("80000"),
+                "KRW",
+                LedgerDirection.DEBIT,
+                LedgerStatus.POSTED,
+                "결제 환불",
+                Instant.parse("2026-08-15T00:01:00Z"),
                 null,
                 0L
         );

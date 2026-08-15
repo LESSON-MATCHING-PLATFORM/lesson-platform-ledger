@@ -10,4 +10,6 @@ import java.util.Optional;
 public interface LedgerEntryRepository extends CrudRepository<LedgerEntry, String> {
 
     Optional<LedgerEntry> findByIdempotencyKey(String idempotencyKey);
+
+    Optional<LedgerEntry> findByEntryId(String entryId);
 }
