@@ -20,6 +20,7 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -88,6 +89,46 @@ class LedgerEntryControllerTest {
     }
 
     @Test
+    @DisplayName("보정 원장 요청을 원본 entryId와 함께 서비스에 위임한다")
+    void recordsAdjustmentEntry() throws Exception {
+        RecordLedgerEntryResult result = new RecordLedgerEntryResult(
+                "ledger-adjustment-1",
+                "refund-1",
+                LedgerTransactionType.REFUND,
+                new BigDecimal("80000"),
+                "KRW",
+                LedgerDirection.DEBIT,
+                LedgerStatus.POSTED,
+                Instant.parse("2026-08-15T00:01:00Z")
+        );
+        when(ledgerEntryService.recordAdjustmentEntry(
+                eq("ledger-1"), any(RecordLedgerEntryCommand.class)))
+                .thenReturn(result);
+
+        mockMvc.perform(post("/ledger-entry/ledger-1/adjustment")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validRequestJsonWithDetails(
+                                "refund:payment-1:completed",
+                                "REFUND",
+                                "refund-1",
+                                "DEBIT",
+                                "80000"
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entryId").value("ledger-adjustment-1"))
+                .andExpect(jsonPath("$.transactionType").value("REFUND"))
+                .andExpect(jsonPath("$.direction").value("DEBIT"));
+
+        ArgumentCaptor<RecordLedgerEntryCommand> captor =
+                ArgumentCaptor.forClass(RecordLedgerEntryCommand.class);
+        verify(ledgerEntryService).recordAdjustmentEntry(eq("ledger-1"), captor.capture());
+
+        assertThat(captor.getValue().transactionType()).isEqualTo(LedgerTransactionType.REFUND);
+        assertThat(captor.getValue().direction()).isEqualTo(LedgerDirection.DEBIT);
+        assertThat(captor.getValue().idempotencyKey()).isEqualTo("refund:payment-1:completed");
+    }
+
+    @Test
     @DisplayName("멱등성 키가 비어 있으면 400 응답을 반환하고 서비스를 호출하지 않는다")
     void rejectsBlankIdempotencyKey() throws Exception {
         mockMvc.perform(post("/ledger-entry")
@@ -134,19 +175,29 @@ class LedgerEntryControllerTest {
     }
 
     private String validRequestJson(String idempotencyKey, String amount) {
+        return validRequestJsonWithDetails(idempotencyKey, "PAYMENT", "payment-1", "CREDIT", amount);
+    }
+
+    private String validRequestJsonWithDetails(
+            String idempotencyKey,
+            String transactionType,
+            String transactionId,
+            String direction,
+            String amount
+    ) {
         return """
                 {
                   "idempotencyKey": "%s",
-                  "transactionType": "PAYMENT",
-                  "transactionId": "payment-1",
+                  "transactionType": "%s",
+                  "transactionId": "%s",
                   "orderId": "order-1",
                   "userId": "user-1",
                   "accountId": "seller-1",
                   "amount": %s,
                   "currency": "KRW",
-                  "direction": "CREDIT",
+                  "direction": "%s",
                   "description": "강의 결제"
                 }
-                """.formatted(idempotencyKey, amount);
+                """.formatted(idempotencyKey, transactionType, transactionId, amount, direction);
     }
 }

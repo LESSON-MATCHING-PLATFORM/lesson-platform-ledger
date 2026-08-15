@@ -10,6 +10,7 @@ import com.hwan.lessonplatformledger.ledger.domain.LedgerTransactionType;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,8 +28,26 @@ public class LedgerEntryController {
     public RecordLedgerEntryResponse recordLedgerEntry(
         @Valid @RequestBody RecordLedgerEntryRequest request
     ) {
-        RecordLedgerEntryResult recordLedgerEntryResult = ledgerEntryService.recordEntry(
-            new RecordLedgerEntryCommand(
+        RecordLedgerEntryResult recordLedgerEntryResult = ledgerEntryService.recordEntry(toCommand(request));
+
+        return RecordLedgerEntryResponse.of(recordLedgerEntryResult);
+    }
+
+    @PostMapping("/{entryId}/adjustment")
+    public RecordLedgerEntryResponse recordAdjustmentEntry(
+            @PathVariable String entryId,
+            @Valid @RequestBody RecordLedgerEntryRequest request
+    ) {
+        RecordLedgerEntryResult recordLedgerEntryResult = ledgerEntryService.recordAdjustmentEntry(
+                entryId,
+                toCommand(request)
+        );
+
+        return RecordLedgerEntryResponse.of(recordLedgerEntryResult);
+    }
+
+    private RecordLedgerEntryCommand toCommand(RecordLedgerEntryRequest request) {
+        return new RecordLedgerEntryCommand(
                 request.idempotencyKey(),
                 parseTransactionType(request.transactionType()),
                 request.transactionId(),
@@ -39,10 +58,7 @@ public class LedgerEntryController {
                 request.currency(),
                 parseDirection(request.direction()),
                 request.description()
-            )
         );
-
-        return RecordLedgerEntryResponse.of(recordLedgerEntryResult);
     }
 
     private LedgerTransactionType parseTransactionType(String value) {
