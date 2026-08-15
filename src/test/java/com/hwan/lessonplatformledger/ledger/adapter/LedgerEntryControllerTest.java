@@ -8,6 +8,7 @@ import com.hwan.lessonplatformledger.ledger.domain.LedgerStatus;
 import com.hwan.lessonplatformledger.ledger.domain.LedgerTransactionType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -30,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Ledger Entry Controller 테스트")
 class LedgerEntryControllerTest {
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
