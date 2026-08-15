@@ -108,6 +108,30 @@ class LedgerEntryControllerTest {
         verifyNoInteractions(ledgerEntryService);
     }
 
+    @Test
+    @DisplayName("지원하지 않는 transactionType enum 값이면 400 응답을 반환하고 서비스를 호출하지 않는다")
+    void rejectsInvalidTransactionType() throws Exception {
+        mockMvc.perform(post("/ledger-entry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "idempotencyKey": "payment:payment-1:completed",
+                                  "transactionType": "INVALID_TRANSACTION_TYPE",
+                                  "transactionId": "payment-1",
+                                  "orderId": "order-1",
+                                  "userId": "user-1",
+                                  "accountId": "seller-1",
+                                  "amount": 80000,
+                                  "currency": "KRW",
+                                  "direction": "CREDIT",
+                                  "description": "강의 결제"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(ledgerEntryService);
+    }
+
     private String validRequestJson(String idempotencyKey, String amount) {
         return """
                 {

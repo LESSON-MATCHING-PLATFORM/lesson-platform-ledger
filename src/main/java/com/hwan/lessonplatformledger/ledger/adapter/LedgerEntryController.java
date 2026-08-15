@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Locale;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/ledger-entry")
@@ -28,19 +30,41 @@ public class LedgerEntryController {
         RecordLedgerEntryResult recordLedgerEntryResult = ledgerEntryService.recordEntry(
             new RecordLedgerEntryCommand(
                 request.idempotencyKey(),
-                LedgerTransactionType.valueOf(request.transactionType()),
+                parseTransactionType(request.transactionType()),
                 request.transactionId(),
                 request.orderId(),
                 request.userId(),
                 request.accountId(),
                 request.amount(),
                 request.currency(),
-                LedgerDirection.valueOf(request.direction()),
+                parseDirection(request.direction()),
                 request.description()
             )
         );
 
         return RecordLedgerEntryResponse.of(recordLedgerEntryResult);
+    }
+
+    private LedgerTransactionType parseTransactionType(String value) {
+        try {
+            return LedgerTransactionType.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidLedgerRequestException(
+                    "지원하지 않는 transactionType입니다: " + value,
+                    exception
+            );
+        }
+    }
+
+    private LedgerDirection parseDirection(String value) {
+        try {
+            return LedgerDirection.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidLedgerRequestException(
+                    "지원하지 않는 direction입니다: " + value,
+                    exception
+            );
+        }
     }
 
 }
