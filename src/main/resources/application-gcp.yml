@@ -1,0 +1,22 @@
+spring:
+  config:
+    activate:
+      on-profile: gcp
+    import: sm://
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${sm://DB_HOST}:3306/fillinv_ledger?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${sm://DB_USERNAME}
+    password: ${sm://DB_PASSWORD}
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+logging:
+  file:
+    name: /app/logs/lesson-ledger.log
+  level:
+    root: INFO

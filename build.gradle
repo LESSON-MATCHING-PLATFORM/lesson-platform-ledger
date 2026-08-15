@@ -18,12 +18,20 @@ repositories {
     mavenCentral()
 }
 
+dependencyManagement {
+    imports {
+        mavenBom "com.google.cloud:spring-cloud-gcp-dependencies:8.0.2"
+    }
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-h2console'
     implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-mysql'
+    implementation 'com.google.cloud:spring-cloud-gcp-starter-secretmanager'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.h2database:h2'

@@ -1,4 +1,8 @@
 spring:
+  config:
+    activate:
+      on-profile: test
+
   datasource:
     driver-class-name: org.h2.Driver
     url: "jdbc:h2:mem:ledger-context;MODE=MySQL;DATABASE_TO_UPPER=FALSE;DB_CLOSE_DELAY=-1"
@@ -6,6 +10,8 @@ spring:
     password:
   flyway:
     enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
   sql:
     init:
       mode: never
