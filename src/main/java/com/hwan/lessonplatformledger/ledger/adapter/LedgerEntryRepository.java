@@ -5,6 +5,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface LedgerEntryRepository extends CrudRepository<LedgerEntry, String> {
@@ -12,4 +13,10 @@ public interface LedgerEntryRepository extends CrudRepository<LedgerEntry, Strin
     Optional<LedgerEntry> findByIdempotencyKey(String idempotencyKey);
 
     Optional<LedgerEntry> findByEntryId(String entryId);
+
+    List<LedgerEntry> findAllByTransactionIdOrderByCreatedAtAsc(String transactionId);
+
+    List<LedgerEntry> findAllByOrderIdOrderByCreatedAtAsc(String orderId);
+
+    List<LedgerEntry> findAllByAccountIdOrderByCreatedAtAsc(String accountId);
 }

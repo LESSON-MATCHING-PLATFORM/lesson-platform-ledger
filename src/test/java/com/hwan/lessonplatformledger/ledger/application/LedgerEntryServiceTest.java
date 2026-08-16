@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -193,6 +194,54 @@ class LedgerEntryServiceTest {
         assertThat(originalEntry.getReversedEntryId()).isEqualTo(existingAdjustment.getEntryId());
         verify(ledgerEntryRepository, never()).save(existingAdjustment);
         verify(ledgerEntryRepository).save(originalEntry);
+    }
+
+    @Test
+    @DisplayName("entryId로 원장을 조회한다")
+    void findsEntryByEntryId() {
+        LedgerEntry entry = savedEntry();
+        when(ledgerEntryRepository.findByEntryId(entry.getEntryId())).thenReturn(Optional.of(entry));
+
+        assertThat(ledgerEntryService.findEntry(entry.getEntryId())).isSameAs(entry);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 entryId를 조회하면 전용 예외를 던진다")
+    void throwsNotFoundWhenEntryDoesNotExist() {
+        when(ledgerEntryRepository.findByEntryId("missing-entry")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> ledgerEntryService.findEntry("missing-entry"))
+                .isInstanceOf(LedgerEntryNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("transactionId로 원장 목록을 조회한다")
+    void findsEntriesByTransactionId() {
+        List<LedgerEntry> entries = List.of(savedEntry());
+        when(ledgerEntryRepository.findAllByTransactionIdOrderByCreatedAtAsc("payment-1"))
+                .thenReturn(entries);
+
+        assertThat(ledgerEntryService.findEntriesByTransactionId("payment-1")).containsExactlyElementsOf(entries);
+    }
+
+    @Test
+    @DisplayName("orderId로 원장 목록을 조회한다")
+    void findsEntriesByOrderId() {
+        List<LedgerEntry> entries = List.of(savedEntry());
+        when(ledgerEntryRepository.findAllByOrderIdOrderByCreatedAtAsc("order-1"))
+                .thenReturn(entries);
+
+        assertThat(ledgerEntryService.findEntriesByOrderId("order-1")).containsExactlyElementsOf(entries);
+    }
+
+    @Test
+    @DisplayName("accountId로 원장 목록을 조회한다")
+    void findsEntriesByAccountId() {
+        List<LedgerEntry> entries = List.of(savedEntry());
+        when(ledgerEntryRepository.findAllByAccountIdOrderByCreatedAtAsc("seller-1"))
+                .thenReturn(entries);
+
+        assertThat(ledgerEntryService.findEntriesByAccountId("seller-1")).containsExactlyElementsOf(entries);
     }
 
     private RecordLedgerEntryCommand command() {

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -29,6 +30,27 @@ public class LedgerEntryService {
                     .map(RecordLedgerEntryResult::of)
                     .orElseThrow(() -> exception);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public LedgerEntry findEntry(String entryId) {
+        return ledgerEntryRepository.findByEntryId(entryId)
+                .orElseThrow(() -> new LedgerEntryNotFoundException(entryId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<LedgerEntry> findEntriesByTransactionId(String transactionId) {
+        return ledgerEntryRepository.findAllByTransactionIdOrderByCreatedAtAsc(transactionId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<LedgerEntry> findEntriesByOrderId(String orderId) {
+        return ledgerEntryRepository.findAllByOrderIdOrderByCreatedAtAsc(orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<LedgerEntry> findEntriesByAccountId(String accountId) {
+        return ledgerEntryRepository.findAllByAccountIdOrderByCreatedAtAsc(accountId);
     }
 
     @Transactional

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -172,6 +173,64 @@ class LedgerEntryControllerTest {
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(ledgerEntryService);
+    }
+
+    @Test
+    @DisplayName("entryId로 원장을 조회한다")
+    void findsLedgerEntry() throws Exception {
+        when(ledgerEntryService.findEntry("ledger-1")).thenReturn(entry());
+
+        mockMvc.perform(get("/ledger-entry/ledger-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entryId").value("ledger-1"))
+                .andExpect(jsonPath("$.idempotencyKey").value("payment:payment-1:completed"))
+                .andExpect(jsonPath("$.orderId").value("order-1"))
+                .andExpect(jsonPath("$.accountId").value("seller-1"))
+                .andExpect(jsonPath("$.version").value(0));
+
+        verify(ledgerEntryService).findEntry("ledger-1");
+    }
+
+    @Test
+    @DisplayName("거래 식별자로 원장 목록을 조회한다")
+    void findsLedgerEntriesByTransactionId() throws Exception {
+        when(ledgerEntryService.findEntriesByTransactionId("payment-1")).thenReturn(java.util.List.of(entry()));
+
+        mockMvc.perform(get("/ledger-entry/transaction/payment-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].entryId").value("ledger-1"))
+                .andExpect(jsonPath("$[0].transactionId").value("payment-1"));
+    }
+
+    @Test
+    @DisplayName("없는 entryId를 조회하면 404 응답을 반환한다")
+    void returnsNotFoundWhenLedgerEntryDoesNotExist() throws Exception {
+        when(ledgerEntryService.findEntry("missing-entry"))
+                .thenThrow(new com.hwan.lessonplatformledger.ledger.application.LedgerEntryNotFoundException("missing-entry"));
+
+        mockMvc.perform(get("/ledger-entry/missing-entry"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("LEDGER_ENTRY_NOT_FOUND"));
+    }
+
+    private com.hwan.lessonplatformledger.ledger.domain.LedgerEntry entry() {
+        return new com.hwan.lessonplatformledger.ledger.domain.LedgerEntry(
+                "ledger-1",
+                "payment:payment-1:completed",
+                LedgerTransactionType.PAYMENT,
+                "payment-1",
+                "order-1",
+                "user-1",
+                "seller-1",
+                new BigDecimal("80000"),
+                "KRW",
+                LedgerDirection.CREDIT,
+                LedgerStatus.POSTED,
+                "강의 결제",
+                Instant.parse("2026-08-15T00:00:00Z"),
+                null,
+                0L
+        );
     }
 
     private String validRequestJson(String idempotencyKey, String amount) {
